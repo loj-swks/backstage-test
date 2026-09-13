@@ -1,0 +1,89 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: adr-ai-system-card-template
+  title: AI System Card & ADR Documentation
+  description: Scaffolds TechDocs-compliant Architecture Decision Records (ADRs), model cards, and AI compliance documentation.
+  tags:
+    - documentation
+    - architecture
+    - techdocs
+    - compliance
+spec:
+  owner: user:guest
+  type: documentation
+
+  parameters:
+    - title: System Documentation Details
+      required:
+        - name
+        - owner
+        - systemScope
+      properties:
+        name:
+          title: Project / System Name
+          type: string
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+        owner:
+          title: Owner
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds: [Group, User]
+        systemScope:
+          title: Primary System Type
+          type: string
+          default: agentic-system
+          enum: [agentic-system, data-pipeline, fine-tuned-model]
+          enumNames:
+            - Agentic Workflow / Multi-Agent
+            - Data Ingestion Pipeline
+            - Fine-Tuned / Hosted LLM
+
+    - title: Target Repository
+      required: [repoUrl]
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts: [github.com]
+
+  steps:
+    - id: template
+      name: Generate TechDocs & System Card Files
+      action: fetch:template
+      input:
+        url: ./template
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          systemScope: ${{ parameters.systemScope }}
+
+    - id: publish
+      name: Publish Repository
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    - id: register
+      name: Register in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

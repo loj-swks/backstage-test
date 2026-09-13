@@ -1,0 +1,88 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: ai-safety-guardrails-template
+  title: AI Safety & Guardrails Middleware
+  description: Scaffolds content moderation, prompt injection detection, and PII masking middleware for AI applications.
+  tags:
+    - ai
+    - security
+    - guardrails
+    - compliance
+spec:
+  owner: user:guest
+  type: service
+
+  parameters:
+    - title: Guardrail Configuration
+      required:
+        - name
+        - owner
+      properties:
+        name:
+          title: Middleware Name
+          type: string
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+        owner:
+          title: Owner
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds: [Group, User]
+        enablePIIMasking:
+          title: Enable Automatic PII Anonymization
+          type: boolean
+          default: true
+        enablePromptInjectionFilter:
+          title: Enable Prompt Injection Shielding
+          type: boolean
+          default: true
+
+    - title: Target Repository
+      required: [repoUrl]
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts: [github.com]
+
+  steps:
+    - id: template
+      name: Render Guardrail Skeleton
+      action: fetch:template
+      input:
+        url: ./template
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          enablePIIMasking: ${{ parameters.enablePIIMasking }}
+          enablePromptInjectionFilter: ${{ parameters.enablePromptInjectionFilter }}
+
+    - id: publish
+      name: Publish Repository
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    - id: register
+      name: Register in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

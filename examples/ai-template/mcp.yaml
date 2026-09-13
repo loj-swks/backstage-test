@@ -1,0 +1,90 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: mcp-server-template
+  title: Model Context Protocol (MCP) Server
+  description: Scaffolds a Python FastMCP server to expose enterprise tools and resources securely to AI agents.
+  tags:
+    - ai
+    - mcp
+    - tools
+    - python
+spec:
+  owner: user:guest
+  type: service
+
+  parameters:
+    - title: MCP Server Metadata
+      required:
+        - name
+        - owner
+        - transportType
+      properties:
+        name:
+          title: Server Name
+          type: string
+          description: Name of the MCP server (e.g. mcp-database-connector)
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+          description: Capabilities and tools provided by this MCP server
+        owner:
+          title: Owner
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds: [Group, User]
+        transportType:
+          title: Transport Protocol
+          type: string
+          default: sse
+          enum: [sse, stdio]
+          enumNames:
+            - Server-Sent Events (HTTP/SSE)
+            - Standard Input/Output (stdio)
+
+    - title: Target Repository
+      required: [repoUrl]
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts: [github.com]
+
+  steps:
+    - id: template
+      name: Generate MCP Server Code
+      action: fetch:template
+      input:
+        url: ./template
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          transportType: ${{ parameters.transportType }}
+
+    - id: publish
+      name: Publish Repository
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    - id: register
+      name: Register in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/custom-folder/catalog-info.yaml'
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

@@ -54,3 +54,9 @@ e2e-test-report/
 
 # Cache
 .cache/
+
+# db
+# Local SQLite databases
+*.sqlite
+*.sqlite3
+*.db

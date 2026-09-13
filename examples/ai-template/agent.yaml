@@ -1,0 +1,188 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: agentic-service-template
+  title: Agentic AI & RAG Service Template
+  description: Scaffolds a production-ready agentic service (LangGraph/FastAPI) with optional RAG indexing (pgvector/Elasticsearch) and observability tracing.
+  tags:
+    - python
+    - langgraph
+    - ai-agent
+    - rag
+    - opentelemetry
+spec:
+  owner: user:guest
+  type: service
+
+  # ------------------------------------------------------------------------
+  # 1. User Input Form Steps
+  # ------------------------------------------------------------------------
+  parameters:
+    - title: Basic Information
+      required:
+        - name
+        - description
+        - owner
+      properties:
+        name:
+          title: Service Name
+          type: string
+          description: Unique name of the agentic microservice (kebab-case).
+          ui:autofocus: true
+          ui:options:
+            rows: 1
+        description:
+          title: Description
+          type: string
+          description: Purpose of this agent service.
+        owner:
+          title: Owner
+          type: string
+          description: Team responsible for maintaining this service.
+          ui:field: EntityPicker
+          ui:options:
+            allowedKinds:
+              - Group
+              - User
+
+    - title: Architecture & Capabilities
+      required:
+        - architecture_style
+        - vector_store
+      properties:
+        architecture_style:
+          title: Agent Architecture Pattern
+          type: string
+          default: single-agent-rag
+          enum:
+            - single-agent-rag
+            - multi-agent-supervisor
+            - autonomous-tool-agent
+          enumNames:
+            - "Agentic RAG (Single Agent + Vector DB / Hybrid Search)"
+            - "Multi-Agent Orchestrator (Supervisor + Subagent Mesh)"
+            - "Autonomous Tool-Calling Agent (No RAG)"
+
+        include_vector_search:
+          title: Enable Vector & Hybrid Search Indexing
+          type: boolean
+          default: true
+          description: Includes chunking pipelines, embedding clients, and vector store connectors.
+
+        vector_store:
+          title: Primary Vector / Search Backend
+          type: string
+          default: elasticsearch
+          enum:
+            - elasticsearch
+            - pgvector
+            - none
+          enumNames:
+            - "Elasticsearch (Hybrid Search)"
+            - "PostgreSQL (pgvector / pg_trgm)"
+            - "None (Pure Tool Calling / In-Memory)"
+
+        enable_observability:
+          title: Enable OpenTelemetry / LangSmith Tracing
+          type: boolean
+          default: true
+          description: Pre-configures trace exporters and callbacks for AI observability.
+
+    - title: Destination Repository
+      required:
+        - repoUrl
+        - catalogInfoPath
+        - target_existing_repo
+      properties:
+        target_existing_repo:
+          title: Target an existing repository?
+          type: boolean
+          default: false
+          description: Check this if the repository already exists (e.g. catalog-registry) to create a PR instead of creating a new repo.
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+              - azure.com
+        catalogInfoPath:
+          title: Catalog File Path
+          type: string
+          default: catalog/agent/catalog-info.yaml
+          description: Relative path within the repo where the catalog definition file will be created/registered.
+
+  # ------------------------------------------------------------------------
+  # 2. Scaffolder Execution Steps
+  # ------------------------------------------------------------------------
+  steps:
+    # Step 1: Generate the files (catalog-info.yaml and any other project files)
+    - id: generate-files
+      name: Generate Project Files
+      action: fetch:template
+      input:
+        url: ../../examples/ai-template/content
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          repoUrl: ${{ parameters.repoUrl }}
+          catalogInfoPath: ${{ parameters.catalogInfoPath }}
+
+    # Option A: Create a brand-new repository when target_existing_repo is false
+    - id: publish-new
+      if: ${{ not parameters.target_existing_repo }}
+      name: Publish New Repository
+      action: publish:github
+      input:
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+        defaultBranch: 'main'
+        allowedHosts: ['github.com', 'azure.com']
+
+    # Option B: Create Pull Request when target_existing_repo is true
+    # The publish:github:pull-request action creates a branch from workspace files and opens a PR
+    - id: publish-existing-pr
+      if: ${{ parameters.target_existing_repo }}
+      name: Publish Pull Request to Existing Repository
+      action: publish:github:pull-request
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        branchName: add-catalog-${{ parameters.name }}
+        targetBranchName: main
+        title: "scaffolder: add catalog for ${{ parameters.name }}"
+        description: ${{ parameters.description }}
+        sourcePath: .
+
+    # Register in Backstage Catalog
+    - id: register
+      name: Register in Backstage Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ not parameters.target_existing_repo
+          ? steps['publish-new'].output.repoContentsUrl
+          : (steps['publish-existing-pr'].output.remoteUrl
+              | split('/')
+              | slice(0, 3)
+              | join('/')
+              + '/tree/'
+              + 'add-catalog-'
+              + parameters.name) }}
+        catalogInfoPath: ${{ parameters.catalogInfoPath }}
+
+  # ------------------------------------------------------------------------
+  # 3. Output Links
+  # ------------------------------------------------------------------------
+  output:
+    links:
+      - title: Repository / Pull Request
+        url: >-
+          ${{
+            steps['publish-new'].output.remoteUrl
+            if not parameters.target_existing_repo
+            else steps['publish-existing-pr'].output.remoteUrl
+          }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

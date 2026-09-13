@@ -1,0 +1,92 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: enterprise-rag-service-template
+  title: Enterprise RAG Service
+  description: Scaffolds a Python RAG service with hybrid search, metadata filtering, and vector database connections.
+  tags:
+    - ai
+    - rag
+    - python
+    - elasticsearch
+    - pgvector
+spec:
+  owner: user:guest
+  type: service
+
+  parameters:
+    - title: RAG Configuration
+      required:
+        - name
+        - owner
+        - vectorStore
+      properties:
+        name:
+          title: Service Name
+          type: string
+          description: Name of the RAG microservice component
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+          description: Business purpose and domain of this RAG pipeline
+        owner:
+          title: Owner
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds: [Group, User]
+        vectorStore:
+          title: Vector Store Backend
+          type: string
+          default: elasticsearch
+          enum: [elasticsearch, pgvector, azure-ai-search]
+          enumNames:
+            - Elasticsearch (Hybrid BM25 + Dense)
+            - PostgreSQL (pgvector)
+            - Azure AI Search
+
+    - title: Target Repository
+      required: [repoUrl]
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts: [github.com]
+
+  steps:
+    - id: template
+      name: Render RAG Template
+      action: fetch:template
+      input:
+        url: ./template
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          vectorStore: ${{ parameters.vectorStore }}
+
+    - id: publish
+      name: Publish Repository
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    - id: register
+      name: Register in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

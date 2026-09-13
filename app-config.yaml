@@ -6,6 +6,20 @@ app:
   packages: all
 
   extensions:
+    - sub-page:scaffolder/templates:
+        config:
+          groups:
+            - title: Services
+              filter:
+                spec.type: service
+            - title: Documentation
+              filter:
+                spec.type: documentation
+            - title: Resources
+              filter:
+                spec.type: resource
+    - api:home/visits: true
+    - app-root-element:home/visit-listener: true
     # Default landing page configuration.
     # The catalog is mounted at /catalog by default but is overridden here to
     # serve as the root page. To switch to the Home page, comment out the
@@ -97,7 +111,7 @@ app:
               height: 4
 
 organization:
-  name: My Company
+  name: Skyworks Inc
 
 backend:
   # Used for enabling authentication, secret is shared by all backend plugins
@@ -123,7 +137,8 @@ backend:
   # The production database configuration is stored in app-config.production.yaml
   database:
     client: better-sqlite3
-    connection: ':memory:'
+    connection:
+      directory: "./db"
   # see https://backstage.io/docs/ai/mcp-actions#actions-configuration for more details
   actions:
     pluginSources:
@@ -164,9 +179,19 @@ techdocs:
 
 auth:
   # see https://backstage.io/docs/auth/ to learn about auth providers
+  environment: development
   providers:
     # See https://backstage.io/docs/auth/guest/provider
     guest: {}
+    github:
+      development:
+        clientId: Ov23li90weWjHLgnc07j
+        clientSecret: fe06f51c4f6dd98dbfa2587d81261a0373e82e39
+        signIn:
+          resolvers:
+            # Matches the GitHub username with the Backstage user entity name.
+            # See https://backstage.io/docs/auth/github/provider#resolvers for more resolvers.
+            - resolver: usernameMatchingUserEntityName
   # see https://backstage.io/docs/ai/mcp-actions#client-id-metadata-documents
   # to learn more about client id metadata documents
   clientIdMetadataDocuments:
@@ -182,6 +207,10 @@ auth:
 
 scaffolder:
   # see https://backstage.io/docs/features/software-templates/configuration for software template options
+  defaultAuthor:
+    name: yourname # Defaults to `Scaffolder`
+    email: your.email@example.com # Defaults to `scaffolder@backstage.io`
+  defaultCommitMessage: "Initial commit" # Defaults to 'Initial commit'
 
 catalog:
   import:
@@ -196,7 +225,39 @@ catalog:
 
     # Local example template
     - type: file
-      target: ../../examples/template/template.yaml
+      target: ../../examples/ai-template/adr.yaml
+      rules:
+        - allow: [Template]
+    - type: file
+      target: ../../examples/ai-template/agent-dev.yaml
+      rules:
+        - allow: [Template]
+    - type: file
+      target: ../../examples/ai-template/agent.yaml
+      rules:
+        - allow: [Template]
+    - type: file
+      target: ../../examples/ai-template/data-pipeline.yaml
+      rules:
+        - allow: [Template]
+    - type: file
+      target: ../../examples/ai-template/llm-deployment.yaml
+      rules:
+        - allow: [Template]
+    - type: file
+      target: ../../examples/ai-template/mcp.yaml
+      rules:
+        - allow: [Template]
+    - type: file
+      target: ../../examples/ai-template/memory.yaml
+      rules:
+        - allow: [Template]
+    - type: file
+      target: ../../examples/ai-template/vector-index.yaml
+      rules:
+        - allow: [Template]
+    - type: file
+      target: ../../examples/ai-template/data-source.yaml
       rules:
         - allow: [Template]
 

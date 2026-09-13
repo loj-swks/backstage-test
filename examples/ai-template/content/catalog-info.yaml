@@ -1,0 +1,13 @@
+apiVersion: backstage.io/v1beta1
+kind: Component
+metadata:
+  name: ${ name }
+  description: ${ description }
+  annotations:
+    github.com/project-slug: ${ repoUrl.replace('github.com/', '').replace(/\.git$/, '') }
+spec:
+  type: service
+  owner: ${ owner }
+  lifecycle: experimental
+  providesApis:
+    - ${ name }-api

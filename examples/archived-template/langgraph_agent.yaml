@@ -1,0 +1,123 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: langgraph-agent-langsmith-template
+  title: LangGraph Agent (Self-Hosted LangSmith)
+  description: Scaffolds a Python LangGraph multi-agent service configured with environment bindings for self-hosted LangSmith tracing.
+  tags:
+    - ai
+    - langgraph
+    - langsmith
+    - python
+    - agent
+spec:
+  owner: user:guest
+  type: service
+
+  # Parameters collect user input in the Backstage UI
+  parameters:
+    - title: Agent Metadata
+      required:
+        - name
+        - owner
+        - graphType
+      properties:
+        name:
+          title: Agent Name
+          type: string
+          description: Unique service name for the LangGraph agent
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+          description: Purpose of this agent application
+        owner:
+          title: Owner
+          type: string
+          description: Owning team or group
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds:
+              - Group
+              - User
+        graphType:
+          title: LangGraph Architecture
+          type: string
+          default: stateful-chat
+          enum:
+            - stateful-chat
+            - plan-and-execute
+            - multi-agent-supervisor
+          enumNames:
+            - Stateful Chat Agent
+            - Plan-and-Execute Loop
+            - Multi-Agent Orchestrator (Supervisor)
+
+    - title: Self-Hosted LangSmith Settings
+      required:
+        - langsmithEndpoint
+        - langsmithProject
+      properties:
+        langsmithEndpoint:
+          title: Self-Hosted LangSmith Endpoint
+          type: string
+          default: https://langsmith.internal.company.com
+          description: Base URL of your internal self-hosted LangSmith instance
+        langsmithProject:
+          title: LangSmith Project Name
+          type: string
+          description: Project name for grouping traces in your internal LangSmith workspace
+
+    - title: Target Repository
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+
+  # Steps execute actions sequentially in the Backstage workspace
+  steps:
+    # Step 1: Fetch skeleton files and inject parameter variables
+    - id: template
+      name: Generate LangGraph Agent Project
+      action: fetch:template
+      input:
+        url: ./template
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          graphType: ${{ parameters.graphType }}
+          langsmithEndpoint: ${{ parameters.langsmithEndpoint }}
+          langsmithProject: ${{ parameters.langsmithProject }}
+
+    # Step 2: Publish generated files to GitHub
+    - id: publish
+      name: Publish Repository
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    # Step 3: Register entity into Backstage Software Catalog
+    - id: register
+      name: Register Component in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
+  # Links presented on success UI
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

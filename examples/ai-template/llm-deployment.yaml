@@ -1,0 +1,97 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: model-serving-template
+  title: Model Serving Service (vLLM / Triton / Azure)
+  description: Scaffolds a containerized model inference deployment pipeline with health probes, latency logging, and artifact versioning.
+  tags:
+    - ai
+    - mlops
+    - vllm
+    - triton
+    - deployment
+spec:
+  owner: user:guest
+  type: service
+
+  parameters:
+    - title: Serving Engine Configuration
+      required:
+        - name
+        - owner
+        - servingEngine
+        - modelArtifactUri
+      properties:
+        name:
+          title: Service Name
+          type: string
+          description: Unique name of the model serving deployment
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+        owner:
+          title: Owner
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds: [Group, User]
+        servingEngine:
+          title: Serving Engine
+          type: string
+          default: vllm
+          enum: [vllm, triton, azure-container-apps]
+          enumNames:
+            - vLLM (High-Throughput LLM Serving)
+            - Triton Inference Server
+            - Azure Container Apps (Managed)
+        modelArtifactUri:
+          title: Model Artifact URI
+          type: string
+          description: Registry location or storage path (e.g., s3://models/v1 or azureml://)
+
+    - title: Target Repository
+      required: [repoUrl]
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts: [github.com]
+
+  steps:
+    - id: template
+      name: Render Model Serving Files
+      action: fetch:template
+      input:
+        url: ./template
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          servingEngine: ${{ parameters.servingEngine }}
+          modelArtifactUri: ${{ parameters.modelArtifactUri }}
+
+    - id: publish
+      name: Publish Repository
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    - id: register
+      name: Register in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/custom-folder/catalog-info.yaml'
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

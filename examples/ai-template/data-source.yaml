@@ -1,0 +1,220 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: data-source-resource-template
+  title: Enterprise Data Source Resource
+  description: Scaffolds a Backstage Resource entity for database, vector index, or message stream governance and dependency tracking.
+  tags:
+    - data
+    - resource
+    - database
+    - governance
+    - infrastructure
+spec:
+  owner: data-platform-team
+  type: resource
+
+  # ------------------------------------------------------------------------
+  # 1. User Input Form Steps
+  # ------------------------------------------------------------------------
+  parameters:
+    - title: Resource Metadata
+      required:
+        - name
+        - description
+        - owner
+        - resource_type
+      properties:
+        name:
+          title: Resource Name
+          type: string
+          description: Unique identifier for the data source (kebab-case, e.g., customer-embeddings-db).
+          ui:autofocus: true
+          ui:options:
+            rows: 1
+        description:
+          title: Description
+          type: string
+          description: What dataset or storage capability does this resource represent?
+        owner:
+          title: Owner Team
+          type: string
+          description: Team responsible for maintaining this data source.
+          ui:field: EntityPicker
+          ui:options:
+            allowedKinds:
+              - Group
+              - User
+        system:
+          title: Parent System (Optional)
+          type: string
+          description: System or domain umbrella this data source belongs to.
+          ui:field: EntityPicker
+          ui:options:
+            allowedKinds:
+              - System
+
+    - title: Data Source Specifications
+      required:
+        - resource_type
+        - engine
+        - environment
+      properties:
+        resource_type:
+          title: Resource Type
+          type: string
+          default: database
+          enum:
+            - database
+            - search-index
+            - graph-database
+            - event-stream
+            - object-storage
+          enumNames:
+            - "Relational / Vector Database (PostgreSQL, pgvector)"
+            - "Search & Document Index (Elasticsearch, OpenSearch)"
+            - "Knowledge Graph (Neo4j, Apache AGE)"
+            - "Event Streaming Topic (Kafka, Event Hubs)"
+            - "Object Storage Bucket (Azure Blob, S3)"
+
+        engine:
+          title: Database / Engine Type
+          type: string
+          default: postgresql
+          enum:
+            - postgresql
+            - elasticsearch
+            - neo4j
+            - kafka
+            - azure-blob
+            - on-prem-mssql
+            - cloud-mysql
+            - databricks
+            - redis
+            - other
+          enumNames:
+            - "PostgreSQL (pgvector / pg_trgm)"
+            - "Elasticsearch"
+            - "Neo4j / GraphDB"
+            - "Apache Kafka / Event Hubs"
+            - "Azure Blob Storage"
+            - "On-Premises Microsoft SQL Server"
+            - "Cloud MySQL"
+            - "Databricks Lakehouse / Delta Lake"
+            - "Redis / Key-Value Store"
+            - "Other / Custom Engine"
+
+        custom_engine:
+          title: Custom Engine Name
+          type: string
+          description: Specify your database or engine name (e.g., milvus, qdrant, snowflake, pinecone).
+
+        environment:
+          title: Target Environment
+          type: string
+          default: development
+          enum:
+            - development
+            - staging
+            - production
+
+      # --------------------------------------------------------------------
+      # Form Dependency: Require custom_engine ONLY when engine == 'other'
+      # --------------------------------------------------------------------
+      dependencies:
+        engine:
+          oneOf:
+            - properties:
+                engine:
+                  enum:
+                    - postgresql
+                    - elasticsearch
+                    - neo4j
+                    - kafka
+                    - azure-blob
+            - properties:
+                engine:
+                  enum:
+                    - other
+              required:
+                - custom_engine
+
+    - title: Governance & Compliance
+      required:
+        - contains_pii
+        - data_classification
+      properties:
+        contains_pii:
+          title: Contains PII / Sensitive Personal Data
+          type: boolean
+          default: false
+        data_classification:
+          title: Data Classification Level
+          type: string
+          default: internal
+          enum:
+            - public
+            - internal
+            - confidential
+            - restricted
+
+    - title: Destination Repository
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository / Storage Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+              - azure.com
+
+  # ------------------------------------------------------------------------
+  # 2. Scaffolder Execution Steps
+  # ------------------------------------------------------------------------
+  steps:
+    - id: fetch-base
+      name: Fetch Resource Template Skeleton
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          system: ${{ parameters.system }}
+          resource_type: ${{ parameters.resource_type }}
+          engine: ${{ parameters.engine }}
+          custom_engine: ${{ parameters.custom_engine }}
+          environment: ${{ parameters.environment }}
+          contains_pii: ${{ parameters.contains_pii }}
+          data_classification: ${{ parameters.data_classification }}
+
+    - id: publish
+      name: Publish Catalog Files to Repository
+      action: publish:github
+      input:
+        allowedHosts:
+          - github.com
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    - id: register
+      name: Register Resource in Backstage Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.remoteUrl }}
+        catalogInfoPath: '/custom-folder/catalog-info.yaml'
+
+  # ------------------------------------------------------------------------
+  # 3. Output Links
+  # ------------------------------------------------------------------------
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: View Resource in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

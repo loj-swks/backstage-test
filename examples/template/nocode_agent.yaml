@@ -1,0 +1,119 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: ai-nocode-agent-template
+  title: No-Code AI Agent Template
+  description: Scaffolds a declarative, configuration-driven AI agent workflow without custom code.
+  tags:
+    - ai
+    - llm
+    - no-code
+    - agent
+spec:
+  owner: user:guest
+  type: service
+
+  # Parameters collect user input in the Backstage UI
+  parameters:
+    - title: Agent Configuration
+      required:
+        - name
+        - owner
+        - modelProvider
+        - agentType
+      properties:
+        name:
+          title: Agent Name
+          type: string
+          description: Unique name for your AI agent component
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+          description: Summary of what this AI agent does
+        owner:
+          title: Owner
+          type: string
+          description: Team or user responsible for this agent
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds:
+              - Group
+              - User
+        modelProvider:
+          title: Model Provider
+          type: string
+          default: openai
+          enum:
+            - openai
+            - anthropic
+            - azure-openai
+          enumNames:
+            - OpenAI (GPT-4o)
+            - Anthropic (Claude)
+            - Azure OpenAI
+        agentType:
+          title: Agent Type
+          type: string
+          default: rag-assistant
+          enum:
+            - rag-assistant
+            - web-search-agent
+            - structured-output-extractor
+          enumNames:
+            - RAG Knowledge Base Assistant
+            - Web Search & Research Agent
+            - Structured Data Extractor
+
+    - title: Target Repository
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+
+  # Steps execute sequential scaffolding tasks
+  steps:
+    # Step 1: Fetch skeleton files and inject parameter variables
+    - id: template
+      name: Generate Agent Workflow Files
+      action: fetch:template
+      input:
+        url: ./template
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          modelProvider: ${{ parameters.modelProvider }}
+          agentType: ${{ parameters.agentType }}
+
+    # Step 2: Publish the generated repository to GitHub
+    - id: publish
+      name: Publish Repository
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    # Step 3: Register the new agent component in the Catalog
+    - id: register
+      name: Register in Backstage Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
+  # Output links returned to the user on completion
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

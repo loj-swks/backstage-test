@@ -1,0 +1,90 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: ade-sandbox-template
+  title: Agentic Dev Environment (ADE) Sandbox
+  description: Provisions isolated, containerized dev environments with restricted egress and compute bounds for coding agents.
+  tags:
+    - ai
+    - sandbox
+    - security
+    - docker
+    - ade
+spec:
+  owner: user:guest
+  type: service
+
+  parameters:
+    - title: Sandbox Parameters
+      required:
+        - name
+        - owner
+        - runtime
+      properties:
+        name:
+          title: Sandbox Name
+          type: string
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+        owner:
+          title: Owner
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds: [Group, User]
+        runtime:
+          title: Sandbox Runtime
+          type: string
+          default: python-wsl-container
+          enum: [python-wsl-container, node-isolated, polyglot-microvm]
+          enumNames:
+            - Python / Dev Container Sandbox
+            - Node.js Isolated Process
+            - Polyglot MicroVM (Firecracker/Docker)
+
+    - title: Target Repository
+      required: [repoUrl]
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts: [github.com]
+
+  steps:
+    - id: template
+      name: Generate Sandbox Setup
+      action: fetch:template
+      input:
+        url: ./template
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          runtime: ${{ parameters.runtime }}
+
+    - id: publish
+      name: Publish Repository
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    - id: register
+      name: Register in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

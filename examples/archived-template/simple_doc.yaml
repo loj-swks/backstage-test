@@ -1,0 +1,90 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: documentation-template
+  title: Documentation Site Template
+  description: A template to scaffold a TechDocs-enabled documentation repository using MkDocs.
+  tags:
+    - docs
+    - mkdocs
+    - techdocs
+spec:
+  owner: user:guest
+  type: documentation
+
+  # Parameters collect input from the user in the Backstage frontend UI
+  parameters:
+    - title: Provide Component Information
+      required:
+        - name
+        - owner
+      properties:
+        name:
+          title: Name
+          type: string
+          description: Unique name of the documentation site component
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+          description: A brief description of this documentation project
+        owner:
+          title: Owner
+          type: string
+          description: Owner of the component (e.g. team-name or user:guest)
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds:
+              - Group
+              - User
+
+    - title: Choose Location
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+
+  # Steps execute actions sequentially to create and publish the project
+  steps:
+    # Step 1: Fetch and render skeleton files from the template directory
+    - id: template
+      name: Fetch Template
+      action: fetch:template
+      input:
+        url: ./template
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+
+    # Step 2: Publish the generated files to a remote GitHub repository
+    - id: publish
+      name: Publish to GitHub
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    # Step 3: Register the new component in the Backstage Software Catalog
+    - id: register
+      name: Register in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
+  # Output links shown to the user upon successful execution
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

@@ -1,0 +1,91 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: vector-index-governance-template
+  title: Vector Index Governance & Policy
+  description: Provisions vector collections with mandatory metadata schemas, RBAC access tags, and automated TTL cleanup policies.
+  tags:
+    - ai
+    - vector
+    - governance
+    - database
+spec:
+  owner: user:guest
+  type: resource
+
+  parameters:
+    - title: Index Configuration
+      required:
+        - name
+        - owner
+        - indexType
+      properties:
+        name:
+          title: Index / Collection Name
+          type: string
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+        owner:
+          title: Owner
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds: [Group, User]
+        indexType:
+          title: Index Engine
+          type: string
+          default: elasticsearch
+          enum: [elasticsearch, pgvector, azure-ai-search]
+        ttlDays:
+          title: Retention Policy (TTL in Days)
+          type: integer
+          default: 90
+          description: Auto-expire non-persisted vector documents after N days
+
+    - title: Target Repository
+      required: [repoUrl]
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts: [github.com]
+
+  steps:
+    - id: template
+      name: Fetch Governance Files
+      action: fetch:template
+      input:
+        url: ./template
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          indexType: ${{ parameters.indexType }}
+          ttlDays: ${{ parameters.ttlDays }}
+
+    - id: publish
+      name: Publish Repository
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    - id: register
+      name: Register in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: ${{ parameters.catalogInfoPath }}
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

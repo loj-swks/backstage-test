@@ -1,0 +1,89 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: knowledge-graph-memory-template
+  title: Knowledge Graph & Agentic Memory
+  description: Scaffolds a graph-backed persistent memory pipeline (GraphRAG / Neo4j / Apache AGE) for long-term agent state.
+  tags:
+    - ai
+    - graphrag
+    - neo4j
+    - memory
+    - data
+spec:
+  owner: user:guest
+  type: resource
+
+  parameters:
+    - title: Graph Database Configuration
+      required:
+        - name
+        - owner
+        - graphEngine
+      properties:
+        name:
+          title: Graph Service Name
+          type: string
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+        owner:
+          title: Owner
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds: [Group, User]
+        graphEngine:
+          title: Graph Engine
+          type: string
+          default: neo4j
+          enum: [neo4j, apache-age]
+          enumNames:
+            - Neo4j (Cypher)
+            - Apache AGE (PostgreSQL Extension)
+
+    - title: Target Repository
+      required: [repoUrl]
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts: [github.com]
+
+  steps:
+    - id: template
+      name: Fetch Graph Schema
+      action: fetch:template
+      input:
+        url: ./template
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          graphEngine: ${{ parameters.graphEngine }}
+
+    - id: publish
+      name: Publish Repository
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    - id: register
+      name: Register in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/custom-folder/catalog-info.yaml'
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

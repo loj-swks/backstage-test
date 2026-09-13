@@ -1,0 +1,91 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: embedding-pipeline-template
+  title: Data Ingestion & Embedding Pipeline
+  description: Scaffolds batch/streaming document ingestion with automatic PII redactors, chunking rules, and vector indexing.
+  tags:
+    - ai
+    - data
+    - airflow
+    - embeddings
+    - pipeline
+spec:
+  owner: user:guest
+  type: service
+
+  parameters:
+    - title: Pipeline Setup
+      required:
+        - name
+        - owner
+        - orchestrator
+      properties:
+        name:
+          title: Pipeline Name
+          type: string
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+        owner:
+          title: Owner
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds: [Group, User]
+        orchestrator:
+          title: Pipeline Engine
+          type: string
+          default: airflow
+          enum: [airflow, azure-data-factory, python-asyncio, langgraph-agent]
+          enumNames:
+            - Apache Airflow (DAG)
+            - Azure Data Factory Pipeline
+            - Python Async Workers (`asyncio` + `uv`)
+            - LangGraph Agent (LangChain-style Data ProcessingDAG)
+
+    - title: Target Repository
+      required: [repoUrl]
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts: [github.com]
+
+  steps:
+    - id: template
+      name: Render Pipeline Project
+      action: fetch:template
+      input:
+        url: ./template
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          orchestrator: ${{ parameters.orchestrator }}
+
+    - id: publish
+      name: Publish Repository
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    - id: register
+      name: Register in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/custom-folder/catalog-info.yaml'
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

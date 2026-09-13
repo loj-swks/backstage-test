@@ -1,0 +1,86 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: llm-gateway-proxy-template
+  title: LLM Gateway & Semantic Cache
+  description: Provisions an enterprise proxy (LiteLLM/Redis) for rate limiting, token tracking, and semantic caching.
+  tags:
+    - ai
+    - gateway
+    - litellm
+    - redis
+    - governance
+spec:
+  owner: user:guest
+  type: service
+
+  parameters:
+    - title: Gateway Settings
+      required:
+        - name
+        - owner
+      properties:
+        name:
+          title: Gateway Name
+          type: string
+          description: Name of the gateway instance
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+        owner:
+          title: Owner
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds: [Group, User]
+        enableSemanticCache:
+          title: Enable Redis Semantic Cache
+          type: boolean
+          default: true
+          description: Caches identical or semantically similar LLM requests to reduce costs
+
+    - title: Target Repository
+      required: [repoUrl]
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts: [github.com]
+
+  steps:
+    - id: template
+      name: Generate Gateway Configuration
+      action: fetch:template
+      input:
+        url: ./template
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          enableSemanticCache: ${{ parameters.enableSemanticCache }}
+
+    - id: publish
+      name: Publish Repository
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    - id: register
+      name: Register in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}
