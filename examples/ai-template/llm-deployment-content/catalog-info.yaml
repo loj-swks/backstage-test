@@ -1,0 +1,17 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.name }}
+  description: ${{ values.description }}
+  annotations:
+    github.com/project-slug: ${{ values.repoSlug }}
+    ai.backstage.io/serving-engine: ${{ values.servingEngine }}
+    ai.backstage.io/model-artifact-uri: ${{ values.modelArtifactUri }}
+  tags:
+    - mlops
+    - deployment
+    - ${{ values.servingEngine }}
+spec:
+  type: service
+  owner: ${{ values.owner }}
+  lifecycle: experimental

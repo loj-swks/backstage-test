@@ -1,0 +1,17 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.name }}-docs
+  description: ${{ values.description }}
+  annotations:
+    github.com/project-slug: ${{ values.repoSlug }}
+    backstage.io/techdocs-ref: dir:.
+    ai.backstage.io/system-scope: ${{ values.systemScope }}
+  tags:
+    - documentation
+    - architecture
+    - compliance
+spec:
+  type: documentation
+  owner: ${{ values.owner }}
+  lifecycle: experimental

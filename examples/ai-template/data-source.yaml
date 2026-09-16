@@ -2,14 +2,15 @@ apiVersion: scaffolder.backstage.io/v1beta3
 kind: Template
 metadata:
   name: data-source-resource-template
-  title: Enterprise Data Source Resource
-  description: Scaffolds a Backstage Resource entity for database, vector index, or message stream governance and dependency tracking.
+  title: Enterprise Data Source Resource — PR to Existing Repository
+  description: Opens a pull request registering a Backstage Resource entity for database, vector index, or message stream governance and dependency tracking. Nothing is registered at PR time — the entity appears in the catalog once the PR is merged.
   tags:
     - data
     - resource
     - database
     - governance
     - infrastructure
+    - pull-request
 spec:
   owner: data-platform-team
   type: resource
@@ -158,28 +159,55 @@ spec:
             - confidential
             - restricted
 
-    - title: Destination Repository
+    - title: Existing Repository & Pull Request
       required:
         - repoUrl
+        - catalogDir
+        - targetBranchName
       properties:
         repoUrl:
-          title: Repository / Storage Location
+          title: Existing Repository
           type: string
+          # RepoUrlPicker stores its value as `host?owner=...&repo=...`, so a
+          # default in that form prefills the picker. Both fields stay editable.
+          # GitHub only — publish:github:pull-request has no Azure equivalent.
+          default: github.com?owner=loj-swks&repo=catalog-registry
+          description: The repository that already exists. A pull request is opened against it — defaults to the catalog-registry repo.
           ui:field: RepoUrlPicker
           ui:options:
-            allowedHosts:
-              - github.com
-              - azure.com
+            allowedHosts: [github.com]
+        catalogDir:
+          title: Catalog Directory
+          type: string
+          default: catalog/data-sources
+          description: Directory inside the repository. Files land in `<dir>/<name>/`, so each entity gets its own folder. Must be covered by the discovery `catalogPath` glob.
+        targetBranchName:
+          title: Target Branch
+          type: string
+          default: main
+          description: Branch the pull request is opened against.
+        reviewers:
+          title: Reviewers (Optional)
+          type: array
+          description: GitHub usernames to request review from.
+          items:
+            type: string
+        teamReviewers:
+          title: Team Reviewers (Optional)
+          type: array
+          description: GitHub team slugs to request review from.
+          items:
+            type: string
 
   # ------------------------------------------------------------------------
   # 2. Scaffolder Execution Steps
   # ------------------------------------------------------------------------
   steps:
     - id: fetch-base
-      name: Fetch Resource Template Skeleton
+      name: Fetch Resource Catalog Skeleton
       action: fetch:template
       input:
-        url: ./skeleton
+        url: ./data-source-content
         values:
           name: ${{ parameters.name }}
           description: ${{ parameters.description }}
@@ -191,28 +219,64 @@ spec:
           environment: ${{ parameters.environment }}
           contains_pii: ${{ parameters.contains_pii }}
           data_classification: ${{ parameters.data_classification }}
+          repoSlug: ${{ parameters.repoUrl | projectSlug }}
 
-    - id: publish
-      name: Publish Catalog Files to Repository
-      action: publish:github
+    - id: pull-request
+      name: Open Pull Request
+      action: publish:github:pull-request
       input:
-        description: ${{ parameters.description }}
         repoUrl: ${{ parameters.repoUrl }}
+        branchName: add-data-source-${{ parameters.name }}
+        targetBranchName: ${{ parameters.targetBranchName }}
+        # One folder per entity, so two runs never overwrite each other.
+        targetPath: ${{ parameters.catalogDir }}/${{ parameters.name }}
+        title: "catalog: register data source ${{ parameters.name }}"
+        commitMessage: "catalog: add ${{ parameters.name }} data source definition"
+        reviewers: ${{ parameters.reviewers }}
+        teamReviewers: ${{ parameters.teamReviewers }}
+        # Re-running for the same name updates the open branch instead of
+        # failing on an existing branch.
+        update: true
+        description: |
+          ## Register data source `${{ parameters.name }}`
 
-    - id: register
-      name: Register Resource in Backstage Catalog
-      action: catalog:register
-      input:
-        repoContentsUrl: ${{ steps['publish'].output.remoteUrl }}
-        catalogInfoPath: '/custom-folder/catalog-info.yaml'
+          ${{ parameters.description }}
+
+          | Field | Value |
+          | --- | --- |
+          | Owner | `${{ parameters.owner }}` |
+          | Resource type | `${{ parameters.resource_type }}` |
+          | Engine | `${{ parameters.custom_engine if parameters.engine == 'other' else parameters.engine }}` |
+          | Environment | `${{ parameters.environment }}` |
+          | Classification | `${{ parameters.data_classification }}` |
+          | Contains PII | `${{ parameters.contains_pii }}` |
+          | Catalog file | `${{ parameters.catalogDir }}/${{ parameters.name }}/catalog-info.yaml` |
+
+          Generated by the Backstage scaffolder template `data-source-resource-template`.
+
+          **This PR does not register anything in Backstage.** Once it is merged
+          into `${{ parameters.targetBranchName }}`, GitHub catalog discovery
+          picks up the new `catalog-info.yaml` on its next scan and the entity
+          shows up in the catalog automatically.
+
+    # NOTE: deliberately no `catalog:register` step. Registering a branch that
+    # may never be merged leaves an orphaned entity pointing at a dead ref.
+    # Post-merge registration is handled by catalog.providers.github in
+    # app-config.yaml.
 
   # ------------------------------------------------------------------------
-  # 3. Output Links
+  # 3. Output
   # ------------------------------------------------------------------------
   output:
     links:
-      - title: Repository
-        url: ${{ steps['publish'].output.remoteUrl }}
-      - title: View Resource in Catalog
-        icon: catalog
-        entityRef: ${{ steps['register'].output.entityRef }}
+      - title: Open Pull Request
+        url: ${{ steps['pull-request'].output.remoteUrl }}
+    text:
+      - title: What happens next
+        content: |
+          Pull request **#${{ steps['pull-request'].output.pullRequestNumber }}** adds
+          `${{ parameters.catalogDir }}/${{ parameters.name }}/catalog-info.yaml`.
+
+          After it is merged into `${{ parameters.targetBranchName }}`, GitHub catalog
+          discovery registers `resource:default/${{ parameters.name }}` on its next
+          scan (every 10 minutes by default).

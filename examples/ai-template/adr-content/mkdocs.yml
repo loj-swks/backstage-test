@@ -1,0 +1,5 @@
+site_name: ${{ values.name }} — System Card & ADRs
+nav:
+  - Overview: index.md
+plugins:
+  - techdocs-core

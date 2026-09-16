@@ -1,0 +1,23 @@
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ${{ values.name }}
+  description: ${{ values.description }}
+  annotations:
+    github.com/project-slug: ${{ values.repoSlug }}
+    data.backstage.io/engine: ${{ values.custom_engine if values.engine == 'other' else values.engine }}
+    data.backstage.io/environment: ${{ values.environment }}
+    data.backstage.io/classification: ${{ values.data_classification }}
+    data.backstage.io/contains-pii: '${{ values.contains_pii }}'
+  tags:
+    - data
+    - ${{ values.resource_type }}
+{%- if values.contains_pii %}
+    - pii
+{%- endif %}
+spec:
+  type: ${{ values.resource_type }}
+  owner: ${{ values.owner }}
+{%- if values.system %}
+  system: ${{ values.system }}
+{%- endif %}
