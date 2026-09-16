@@ -19,6 +19,6 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: User
 metadata:
-  name: jiahsuanlo
+  name: loj-swks
 spec:
   memberOf: [guests]

@@ -1,0 +1,16 @@
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ${{ values.name }}
+  description: ${{ values.description }}
+  annotations:
+    github.com/project-slug: ${{ values.repoSlug }}
+    ai.backstage.io/index-engine: ${{ values.indexType }}
+    ai.backstage.io/retention-days: '${{ values.ttlDays }}'
+  tags:
+    - vector
+    - governance
+    - ${{ values.indexType }}
+spec:
+  type: vector-index
+  owner: ${{ values.owner }}
