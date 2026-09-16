@@ -1,0 +1,15 @@
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ${{ values.name }}
+  description: ${{ values.description }}
+  annotations:
+    github.com/project-slug: ${{ values.repoSlug }}
+    ai.backstage.io/graph-engine: ${{ values.graphEngine }}
+  tags:
+    - graphrag
+    - memory
+    - ${{ values.graphEngine }}
+spec:
+  type: graph-database
+  owner: ${{ values.owner }}

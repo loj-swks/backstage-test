@@ -60,12 +60,13 @@ spec:
       name: Render Pipeline Project
       action: fetch:template
       input:
-        url: ./template
+        url: ./data-pipeline-content
         values:
           name: ${{ parameters.name }}
           description: ${{ parameters.description }}
           owner: ${{ parameters.owner }}
           orchestrator: ${{ parameters.orchestrator }}
+          repoSlug: ${{ parameters.repoUrl | projectSlug }}
 
     - id: publish
       name: Publish Repository
@@ -79,7 +80,7 @@ spec:
       action: catalog:register
       input:
         repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
-        catalogInfoPath: '/custom-folder/catalog-info.yaml'
+        catalogInfoPath: '/catalog-info.yaml'
 
   output:
     links:
