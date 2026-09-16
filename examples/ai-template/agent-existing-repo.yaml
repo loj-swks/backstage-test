@@ -1,0 +1,227 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: agentic-service-existing-repo
+  title: Agentic AI & RAG Service — PR to Existing Repository
+  description: Opens a pull request that adds an agentic service catalog definition to an existing repository (e.g. catalog-registry). Nothing is registered at PR time — the entity appears in the catalog automatically once the PR is merged.
+  tags:
+    - python
+    - langgraph
+    - ai-agent
+    - rag
+    - opentelemetry
+    - pull-request
+spec:
+  owner: user:guest
+  type: service
+
+  # ------------------------------------------------------------------------
+  # 1. User Input Form Steps
+  # ------------------------------------------------------------------------
+  parameters:
+    - title: Basic Information
+      required:
+        - name
+        - description
+        - owner
+      properties:
+        name:
+          title: Service Name
+          type: string
+          description: Unique name of the agentic microservice (kebab-case).
+          ui:field: EntityNamePicker
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+          description: Purpose of this agent service.
+        owner:
+          title: Owner
+          type: string
+          description: Team responsible for maintaining this service.
+          ui:field: EntityPicker
+          ui:options:
+            allowedKinds:
+              - Group
+              - User
+        system:
+          title: Parent System (Optional)
+          type: string
+          description: System or domain umbrella this agent belongs to.
+          ui:field: EntityPicker
+          ui:options:
+            allowedKinds:
+              - System
+
+    - title: Architecture & Capabilities
+      required:
+        - architecture_style
+        - vector_store
+      properties:
+        architecture_style:
+          title: Agent Architecture Pattern
+          type: string
+          default: single-agent-rag
+          enum:
+            - single-agent-rag
+            - multi-agent-supervisor
+            - autonomous-tool-agent
+            - no-code-agent-fleet
+            - no-code-agent-copilot
+          enumNames:
+            - "Agentic RAG (Single Agent + Vector DB / Hybrid Search)"
+            - "Multi-Agent Orchestrator (Supervisor + Subagent Mesh)"
+            - "Autonomous Tool-Calling Agent (No RAG)"
+            - "No Code Agent (Langsmith Fleet)"
+            - "No Code Agent (Copilot Agent)"
+
+        include_vector_search:
+          title: Enable Vector & Hybrid Search Indexing
+          type: boolean
+          default: true
+          description: Includes chunking pipelines, embedding clients, and vector store connectors.
+
+        vector_store:
+          title: Primary Vector / Search Backend
+          type: string
+          default: elasticsearch
+          enum:
+            - elasticsearch
+            - pgvector
+            - none
+          enumNames:
+            - "Elasticsearch (Hybrid Search)"
+            - "PostgreSQL (pgvector / pg_trgm)"
+            - "None (Pure Tool Calling / In-Memory)"
+
+        enable_observability:
+          title: Enable OpenTelemetry / LangSmith Tracing
+          type: boolean
+          default: true
+          description: Pre-configures trace exporters and callbacks for AI observability.
+
+    - title: Existing Repository & Pull Request
+      required:
+        - repoUrl
+        - catalogDir
+        - targetBranchName
+      properties:
+        repoUrl:
+          title: Existing Repository
+          type: string
+          # RepoUrlPicker stores its value as `host?owner=...&repo=...`, so a
+          # default in that form prefills the picker. Both fields stay editable.
+          # Keep the owner in sync with catalog.providers.github.agentCatalogs
+          # .organization in app-config.yaml — a PR opened anywhere outside
+          # that owner's catalog-registry will never register itself on merge.
+          default: github.com?owner=loj-swks&repo=catalog-registry
+          description: The repository that already exists. A pull request is opened against it — defaults to the catalog-registry repo.
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+            # To lock this template to the registry repo instead of merely
+            # defaulting to it, uncomment the next two lines: a single-entry
+            # allowedRepos renders a disabled dropdown with just that repo.
+            # allowedRepos:
+            #   - catalog-registry
+        catalogDir:
+          title: Catalog Directory
+          type: string
+          default: catalog/agents
+          description: Directory inside the repository where catalog-info.yaml will be added. Must be covered by the discovery `catalogPath` glob so the entity is picked up after merge.
+        targetBranchName:
+          title: Target Branch
+          type: string
+          default: main
+          description: Branch the pull request is opened against.
+        reviewers:
+          title: Reviewers (Optional)
+          type: array
+          description: GitHub usernames to request review from.
+          items:
+            type: string
+        teamReviewers:
+          title: Team Reviewers (Optional)
+          type: array
+          description: GitHub team slugs to request review from.
+          items:
+            type: string
+
+  # ------------------------------------------------------------------------
+  # 2. Scaffolder Execution Steps
+  # ------------------------------------------------------------------------
+  steps:
+    - id: generate-files
+      name: Generate Catalog Files
+      action: fetch:template
+      input:
+        url: ./content
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          system: ${{ parameters.system }}
+          architecture_style: ${{ parameters.architecture_style }}
+          include_vector_search: ${{ parameters.include_vector_search }}
+          vector_store: ${{ parameters.vector_store }}
+          enable_observability: ${{ parameters.enable_observability }}
+          repoSlug: ${{ parameters.repoUrl | projectSlug }}
+
+    - id: pull-request
+      name: Open Pull Request
+      action: publish:github:pull-request
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        branchName: add-catalog-${{ parameters.name }}
+        targetBranchName: ${{ parameters.targetBranchName }}
+        # Files generated at the workspace root are committed under this directory.
+        targetPath: ${{ parameters.catalogDir }}
+        title: "catalog: register agent ${{ parameters.name }}"
+        commitMessage: "catalog: add ${{ parameters.name }} agent definition"
+        reviewers: ${{ parameters.reviewers }}
+        teamReviewers: ${{ parameters.teamReviewers }}
+        # Re-running the template for the same agent updates the open branch
+        # instead of failing on an existing branch.
+        update: true
+        description: |
+          ## Register agent `${{ parameters.name }}`
+
+          ${{ parameters.description }}
+
+          | Field | Value |
+          | --- | --- |
+          | Owner | `${{ parameters.owner }}` |
+          | Architecture | `${{ parameters.architecture_style }}` |
+          | Vector store | `${{ parameters.vector_store }}` |
+          | Observability | `${{ parameters.enable_observability }}` |
+          | Catalog file | `${{ parameters.catalogDir }}/catalog-info.yaml` |
+
+          Generated by the Backstage scaffolder template `agentic-service-existing-repo`.
+
+          **This PR does not register anything in Backstage.** Once it is merged
+          into `${{ parameters.targetBranchName }}`, GitHub catalog discovery
+          picks up the new `catalog-info.yaml` on its next scan and the entity
+          shows up in the catalog automatically. No manual registration needed.
+
+    # NOTE: deliberately no `catalog:register` step here. Registering a branch
+    # that may never be merged leaves an orphaned entity pointing at a dead ref.
+    # Post-merge registration is handled by catalog.providers.github in
+    # app-config.yaml.
+
+  # ------------------------------------------------------------------------
+  # 3. Output
+  # ------------------------------------------------------------------------
+  output:
+    links:
+      - title: Open Pull Request
+        url: ${{ steps['pull-request'].output.remoteUrl }}
+    text:
+      - title: What happens next
+        content: |
+          Pull request **#${{ steps['pull-request'].output.pullRequestNumber }}** adds
+          `${{ parameters.catalogDir }}/catalog-info.yaml`.
+
+          After it is merged into `${{ parameters.targetBranchName }}`, GitHub catalog
+          discovery registers `component:default/${{ parameters.name }}` on its next
+          scan (every 10 minutes by default). Nothing else to do.

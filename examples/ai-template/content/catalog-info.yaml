@@ -1,13 +1,26 @@
-apiVersion: backstage.io/v1beta1
+apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: ${ name }
-  description: ${ description }
+  name: ${{ values.name }}
+  description: ${{ values.description }}
   annotations:
-    github.com/project-slug: ${ repoUrl.replace('github.com/', '').replace(/\.git$/, '') }
+    github.com/project-slug: ${{ values.repoSlug }}
+    ai.backstage.io/architecture-style: ${{ values.architecture_style }}
+{%- if values.vector_store and values.vector_store != 'none' %}
+    ai.backstage.io/vector-store: ${{ values.vector_store }}
+{%- endif %}
+  tags:
+    - ai-agent
+{%- if values.include_vector_search %}
+    - rag
+{%- endif %}
+{%- if values.enable_observability %}
+    - opentelemetry
+{%- endif %}
 spec:
   type: service
-  owner: ${ owner }
+  owner: ${{ values.owner }}
   lifecycle: experimental
-  providesApis:
-    - ${ name }-api
+{%- if values.system %}
+  system: ${{ values.system }}
+{%- endif %}

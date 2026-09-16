@@ -218,6 +218,55 @@ catalog:
     pullRequestBranchName: backstage-integration
   rules:
     - allow: [Component, System, API, Resource, Location]
+
+  # --------------------------------------------------------------------------
+  # Post-merge refresh for PR-based onboarding.
+  #
+  # The "PR to Existing Repository" templates (e.g.
+  # examples/ai-template/agent-existing-repo.yaml) deliberately do NOT call
+  # catalog:register — the catalog-info.yaml only exists on a branch at that
+  # point. This provider rescans GitHub on a schedule, so once the PR is merged
+  # into the default branch the new entity is registered automatically (and
+  # removed again if the file is later deleted).
+  #
+  # `organization` is spelled out literally on purpose. It also accepts a
+  # personal account (discovery queries `repositoryOwner`, which covers both
+  # users and orgs). Do NOT point it at an env var: if it resolves to nothing
+  # the catalog plugin throws "Either organization or app must be specified" at
+  # startup and then processes NO entities at all — which looks like new
+  # templates silently failing to appear rather than like a config error.
+  #
+  # Needs GITHUB_TOKEN with repo read scope in the shell running the backend.
+  # Without it the catalog still starts and local entities still load; only the
+  # scheduled GitHub scan fails, logging an error every 10 minutes.
+  # Docs: https://backstage.io/docs/integrations/github/discovery
+  # --------------------------------------------------------------------------
+  providers:
+    github:
+      agentCatalogs:
+        organization: 'loj-swks'
+        # Matches catalog-info.yaml at the repo root and nested under e.g.
+        # catalog/agents/. A wildcard path makes the provider walk each repo's
+        # tree, so keep the repository filter below tight.
+        catalogPath: '/**/catalog-info.yaml'
+        filters:
+          branch: main
+          # Regex matched against the repository name. Keep this limited to
+          # repos that are onboarded by pull request — it must stay in sync
+          # with the repoUrl default in
+          # examples/ai-template/agent-existing-repo.yaml.
+          #
+          # IMPORTANT: do not include repos created by the "New Repository"
+          # template — those call catalog:register themselves, and letting
+          # discovery claim the same catalog-info.yaml makes the catalog
+          # report the entity as claimed by two locations. If you would
+          # rather have discovery own everything, widen this regex AND drop
+          # the catalog:register step from examples/ai-template/agent.yaml.
+          repository: '^catalog-registry$'
+        schedule:
+          frequency: { minutes: 10 }
+          timeout: { minutes: 3 }
+
   locations:
     # Local example data, file locations are relative to the backend process, typically `packages/backend`
     - type: file
@@ -234,6 +283,10 @@ catalog:
         - allow: [Template]
     - type: file
       target: ../../examples/ai-template/agent.yaml
+      rules:
+        - allow: [Template]
+    - type: file
+      target: ../../examples/ai-template/agent-existing-repo.yaml
       rules:
         - allow: [Template]
     - type: file
